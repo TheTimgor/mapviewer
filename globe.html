@@ -3,27 +3,18 @@
 <head>
 	<title>yokomap</title>
 	<style>
-		body { margin: 0; }
+		body { margin: 0; background-color: black; }
 		input { display: none; }
 		canvas { position: fixed; top: 0; left: 0; }
 		#dropZone { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;}
-		#drophere { 
-			position: fixed;
-			display: flex;
-			justify-content: center;
-			align-items: center;
-			height: 100%;
-			width: 100%;
-		}
-		#drophere span {
-			border: 2px dashed #f69c55;
-			border-radius: 10px;
-			padding:  100px;
-		}
-
+		.directions { color: lightgray; font-family: monospace; z-index: 15; position: fixed; left: 20px;}
 	</style>
 </head>
-<body>
+<body oncontextmenu="return false;">
+	<p class="directions">
+		mouse to orbit <br> scroll to zoom <br> right click to auto spin <br> drag and drop anywhere to add image   
+	</p>
+
 	<svg
 	   version="1.1"
 	   id="mapsvg"
@@ -362,17 +353,11 @@
 	  </g>
 	</svg>
 
+
 	<div id="dropZone">
-	</div>
-	<div id="drophere">
-		<span >
-			drop image file here
-		</span>
 	</div>
 	<script src="https://threejs.org/build/three.js"></script>
 	<script type="text/javascript">
-
-
 
 		const scene = new THREE.Scene();
 		const camera = new THREE.PerspectiveCamera( 10, window.innerWidth / window.innerHeight, 0.1, 1000 );
@@ -422,40 +407,68 @@
 		camera.position.z = 50;
 
 		let clicked = false;
+		let spin = false;
 		let lastMouseX;
 		let lastMouseY;
 		let mouseX;
 		let mouseY;
+		let velX = 0;
+		let velY = 0;
 
-		const sensitivity = 0.002
+		const sensitivity = 0.0025
 
 		document.addEventListener("mousedown", (e) => {
-			clicked = true; 
+			clicked = true;
+			// spin = false;
 			lastMouseX = mouseX = e.pageX;
 			lastMouseY = mouseY = e.pageY;
+			e.preventDefault();
 		});
 		document.addEventListener("mousemove", (e) => {
 			mouseX = e.pageX;
 			mouseY = e.pageY;
 		})
-		document.addEventListener("mouseup", () => clicked = false);
+		document.addEventListener("mouseup", (e) => {
+			clicked = false;
+			if(e.button == 2){
+				spin = !spin;
+			}
+		});
 
 		const minZ = 5
 		document.addEventListener("wheel", (e) => {
 			camera.position.z += e.deltaY / 35
 			if(camera.position.z < minZ){
-				camera.position.z = minZ
+				camera.position.z = minZ;
 			}
 		})	
+
+		window.addEventListener( 'resize', () => {
+
+		    camera.aspect = window.innerWidth / window.innerHeight;
+		    camera.updateProjectionMatrix();
+		    renderer.setSize( window.innerWidth, window.innerHeight );
+
+		});
 
 		function animate() {
 
 		requestAnimationFrame( animate );
 
 			if(clicked){
-				globe.rotation.y += sensitivity*(mouseX - lastMouseX);
-				globe.rotation.x += sensitivity*(mouseY - lastMouseY);
+				velY = sensitivity * (mouseX - lastMouseX) * (camera.position.z/50);
+				velX = sensitivity * (mouseY - lastMouseY) * (camera.position.z/50);
+			} else if(spin){
+				velX *= 0.8;
+				velY = (velY-0.005)*0.8
+			} else {
+				velX *= 0.8;
+				velY *= 0.8;
 			}
+
+			globe.rotation.x += velX;
+			globe.rotation.y += velY;
+
 
 			if(globe.rotation.x > 1.57079633){
 				globe.rotation.x -= 0.2*(globe.rotation.x-1.57079633)
