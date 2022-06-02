@@ -3,12 +3,13 @@
 <head>
 	<title>yokomap</title>
 	<style>
-		body { margin: 0; background-color: black; }
+		body { margin: 0; background-color: black; overscroll-behavior-y: contain; }
 		input { display: none; }
 		canvas { position: fixed; top: 0; left: 0; }
 		#dropZone { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;}
 		.directions { color: lightgray; font-family: monospace; z-index: 15; position: fixed; left: 20px;}
 	</style>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 </head>
 <body oncontextmenu="return false;">
 	<p class="directions">
@@ -414,16 +415,15 @@
 		let mouseY;
 		let velX = 0;
 		let velY = 0;
-
-		const sensitivity = 0.0025
+		const sensitivity = 0.0025;
 
 		document.addEventListener("mousedown", (e) => {
 			clicked = true;
-			// spin = false;
 			lastMouseX = mouseX = e.pageX;
 			lastMouseY = mouseY = e.pageY;
 			e.preventDefault();
 		});
+
 		document.addEventListener("mousemove", (e) => {
 			mouseX = e.pageX;
 			mouseY = e.pageY;
@@ -443,6 +443,49 @@
 			}
 		})	
 
+		let tapped = false
+		let pinch = false;
+		let lastTouchDist;
+		const touchSensitivity = 0.0050
+
+		document.addEventListener("touchstart", (e) => {
+			if (e.touches.length === 1){
+				tapped = true;
+				lastMouseX = mouseX = e.touches[0].pageX;
+				lastMouseY = mouseY = e.touches[0].pageY;
+			} else {
+				pinch = true
+				lastTouchDist = Math.hypot(
+				    e.touches[0].pageX - e.touches[1].pageX,
+				    e.touches[0].pageY - e.touches[1].pageY);
+				}
+
+		})
+
+		document.addEventListener("touchmove", (e) => {
+			if (pinch) {
+				let touchDist = Math.hypot(
+				    e.touches[0].pageX - e.touches[1].pageX,
+				    e.touches[0].pageY - e.touches[1].pageY);
+				delta = touchDist - lastTouchDist;
+				camera.position.z -= camera.position.z * delta / 300
+				if(camera.position.z < minZ){
+					camera.position.z = minZ;
+				}
+				lastTouchDist = touchDist
+			} else {
+				mouseX = e.touches[0].pageX;
+				mouseY = e.touches[0].pageY;
+			}
+
+		})
+
+		document.addEventListener("touchend", (e) => {
+			tapped = false;
+			pinch = false;
+		});
+
+
 		window.addEventListener( 'resize', () => {
 
 		    camera.aspect = window.innerWidth / window.innerHeight;
@@ -454,10 +497,12 @@
 		function animate() {
 
 		requestAnimationFrame( animate );
-
 			if(clicked){
 				velY = sensitivity * (mouseX - lastMouseX) * (camera.position.z/50);
 				velX = sensitivity * (mouseY - lastMouseY) * (camera.position.z/50);
+			} else if (tapped){
+				velX = touchSensitivity * (mouseY - lastMouseY) * (camera.position.z/50);
+				velY = touchSensitivity * (mouseX - lastMouseX) * (camera.position.z/50);
 			} else if(spin){
 				velX *= 0.8;
 				velY = (velY-0.005)*0.8
