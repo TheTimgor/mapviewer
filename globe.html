@@ -4,19 +4,24 @@
 	<title>yokomap</title>
 	<style>
 		body { margin: 0; background-color: black; overscroll-behavior-y: contain; }
-		input { display: none; }
 		canvas { position: fixed; top: 0; left: 0; }
 		#dropZone { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;}
+		#toggleatmosphere { vertical-align: middle; margin: 0; }
 		.directions { color: lightgray; font-family: monospace; z-index: 15; position: fixed; left: 20px;}
 	</style>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 </head>
 <body oncontextmenu="return false;">
 	<p class="directions">
-		mouse to orbit <br> scroll to zoom <br> right click to auto spin <br> drag and drop anywhere to add image   
+		mouse to orbit <br> 
+		scroll to zoom <br> 
+		right click to toggle auto spin <br> 
+		drag and drop anywhere to add image <br> 
+		<input id="toggleatmosphere" type="checkbox" checked/> atmosphere effect  
 	</p>
 
 	<svg
+	   style="display:none;"
 	   version="1.1"
 	   id="mapsvg"
 	   width="360.32001"
@@ -367,12 +372,21 @@
 		renderer.setSize( window.innerWidth, window.innerHeight );
 		document.body.appendChild( renderer.domElement );
 
-		let texture = new THREE.Texture();
-		let b = new Blob([document.getElementById("mapsvg").outerHTML], {type:"image/svg+xml"})
-		let u = URL.createObjectURL(b);
-		let i = new Image(10000,5000);
-		i.src = u;
-		texture.image = i;
+		let texture;
+
+		let defaultsrc = new URLSearchParams(window.location.search).get("image");
+
+		if(defaultsrc){
+    		texture = new THREE.TextureLoader().load( defaultsrc );
+		} else {
+			texture = new THREE.Texture();
+			let blob = new Blob([document.getElementById("mapsvg").outerHTML], {type:"image/svg+xml"})
+			let bloburl = URL.createObjectURL(blob);
+			let image = new Image(10000,5000);
+			image.src = bloburl;
+			texture.image = image;
+		}
+
 		texture.minFilter = THREE.NearestFilter;
 		texture.needsUpdate = true;
 
@@ -385,6 +399,13 @@
 		const atmo_geometry = new THREE.SphereGeometry(2.2, 64, 32, Math.PI, Math.PI);
 		const atmosphere = new THREE.Mesh( atmo_geometry, atmo_material );
 		scene.add( atmosphere )
+		document.getElementById("toggleatmosphere").addEventListener("change", (e) => {
+			if(e.target.checked){
+				atmosphere.material.opacity = 0.1;
+			} else {
+				atmosphere.material.opacity = 0;
+			}
+		})
 
 		var dropZone = document.getElementById('dropZone');
 
