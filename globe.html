@@ -10,6 +10,205 @@
 		.directions { color: lightgray; font-family: monospace; z-index: 15; position: fixed; left: 20px;}
 	</style>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+	<script type="importmap">
+		  {
+		    "imports": {
+		      "three": "https://unpkg.com/three@v0.149.0/build/three.module.js"
+		    }
+		  }
+	</script>
+	<script type="module">
+		import * as THREE from 'three';
+
+		window.onload = () => {
+
+			const scene = new THREE.Scene();
+			const camera = new THREE.PerspectiveCamera( 10, window.innerWidth / window.innerHeight, 0.1, 1000 );
+
+			const renderer = new THREE.WebGLRenderer();
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			document.body.appendChild( renderer.domElement );
+
+			let texture;
+
+			let defaultsrc = new URLSearchParams(window.location.search).get("image");
+
+			if(defaultsrc){
+	    		texture = new THREE.TextureLoader().load( defaultsrc );
+			} else {
+				texture = new THREE.Texture();
+				let blob = new Blob([document.getElementById("mapsvg").outerHTML], {type:"image/svg+xml"})
+				let bloburl = URL.createObjectURL(blob);
+				let image = new Image(10000,5000);
+				image.src = bloburl;
+				texture.image = image;
+			}
+
+			texture.minFilter = THREE.NearestFilter;
+			texture.needsUpdate = true;
+
+			let material = new THREE.MeshBasicMaterial({map: texture});
+			const geometry = new THREE.SphereGeometry(2, 64, 32);
+			const globe = new THREE.Mesh( geometry, material );
+			scene.add( globe );
+
+			let atmo_material = new THREE.MeshBasicMaterial({opacity: 0.1, transparent: true, color: 0x77f2e4, side:THREE.DoubleSide});
+			const atmo_geometry = new THREE.SphereGeometry(2.2, 64, 32, Math.PI, Math.PI);
+			const atmosphere = new THREE.Mesh( atmo_geometry, atmo_material );
+			scene.add( atmosphere )
+			document.getElementById("toggleatmosphere").addEventListener("change", (e) => {
+				if(e.target.checked){
+					atmosphere.material.opacity = 0.1;
+				} else {
+					atmosphere.material.opacity = 0;
+				}
+			})
+
+			var dropZone = document.getElementById('dropZone');
+
+			dropZone.addEventListener('dragover', function(e) {
+			    e.stopPropagation();
+			    e.preventDefault();
+			})
+
+			dropZone.addEventListener('drop', function(e) {
+			    e.stopPropagation();
+			    e.preventDefault();
+			    let file = e.dataTransfer.files[0]; // Array of all files
+			    let imageurl = URL.createObjectURL(file);
+	    		let texture = new THREE.TextureLoader().load( imageurl );
+				texture.minFilter = THREE.NearestFilter;
+				let material = new THREE.MeshBasicMaterial({map: texture});
+				globe.material = material;
+			})
+
+
+			camera.position.z = 50;
+
+			let clicked = false;
+			let spin = false;
+			let lastMouseX;
+			let lastMouseY;
+			let mouseX;
+			let mouseY;
+			let velX = 0;
+			let velY = 0;
+			const sensitivity = 0.0025;
+
+			document.addEventListener("mousedown", (e) => {
+				clicked = true;
+				lastMouseX = mouseX = e.pageX;
+				lastMouseY = mouseY = e.pageY;
+				e.preventDefault();
+			});
+
+			document.addEventListener("mousemove", (e) => {
+				mouseX = e.pageX;
+				mouseY = e.pageY;
+			})
+			document.addEventListener("mouseup", (e) => {
+				clicked = false;
+				if(e.button == 2){
+					spin = !spin;
+				}
+			});
+
+			const minZ = 5
+			document.addEventListener("wheel", (e) => {
+				camera.position.z += e.deltaY / 35
+				if(camera.position.z < minZ){
+					camera.position.z = minZ;
+				}
+			})	
+
+			let tapped = false
+			let pinch = false;
+			let lastTouchDist;
+			const touchSensitivity = 0.0050
+
+			document.addEventListener("touchstart", (e) => {
+				if (e.touches.length === 1){
+					tapped = true;
+					lastMouseX = mouseX = e.touches[0].pageX;
+					lastMouseY = mouseY = e.touches[0].pageY;
+				} else {
+					pinch = true
+					lastTouchDist = Math.hypot(
+					    e.touches[0].pageX - e.touches[1].pageX,
+					    e.touches[0].pageY - e.touches[1].pageY);
+					}
+
+			})
+
+			document.addEventListener("touchmove", (e) => {
+				if (pinch) {
+					let touchDist = Math.hypot(
+					    e.touches[0].pageX - e.touches[1].pageX,
+					    e.touches[0].pageY - e.touches[1].pageY);
+					delta = touchDist - lastTouchDist;
+					camera.position.z -= camera.position.z * delta / 300
+					if(camera.position.z < minZ){
+						camera.position.z = minZ;
+					}
+					lastTouchDist = touchDist
+				} else {
+					mouseX = e.touches[0].pageX;
+					mouseY = e.touches[0].pageY;
+				}
+
+			})
+
+			document.addEventListener("touchend", (e) => {
+				tapped = false;
+				pinch = false;
+			});
+
+
+			window.addEventListener( 'resize', () => {
+
+			    camera.aspect = window.innerWidth / window.innerHeight;
+			    camera.updateProjectionMatrix();
+			    renderer.setSize( window.innerWidth, window.innerHeight );
+
+			});
+
+			function animate() {
+
+			requestAnimationFrame( animate );
+				if(clicked){
+					velY = sensitivity * (mouseX - lastMouseX) * (camera.position.z/50);
+					velX = sensitivity * (mouseY - lastMouseY) * (camera.position.z/50);
+				} else if (tapped){
+					velX = touchSensitivity * (mouseY - lastMouseY) * (camera.position.z/50);
+					velY = touchSensitivity * (mouseX - lastMouseX) * (camera.position.z/50);
+				} else if(spin){
+					velX *= 0.8;
+					velY = (velY-0.005)*0.8
+				} else {
+					velX *= 0.8;
+					velY *= 0.8;
+				}
+
+				globe.rotation.x += velX;
+				globe.rotation.y += velY;
+
+
+				if(globe.rotation.x > 1.57079633){
+					globe.rotation.x -= 0.2*(globe.rotation.x-1.57079633)
+				} else if(globe.rotation.x < -1.57079633){
+					globe.rotation.x -= 0.2*(1.57079633+globe.rotation.x)
+				}
+
+
+				lastMouseX = mouseX;
+				lastMouseY = mouseY;
+
+				renderer.render( scene, camera );
+			}
+			
+			animate();
+		}
+	</script>
 </head>
 <body oncontextmenu="return false;">
 	<p class="directions">
@@ -362,198 +561,6 @@
 
 	<div id="dropZone">
 	</div>
-	<script src="https://threejs.org/build/three.js"></script>
-	<script type="text/javascript">
-
-		const scene = new THREE.Scene();
-		const camera = new THREE.PerspectiveCamera( 10, window.innerWidth / window.innerHeight, 0.1, 1000 );
-
-		const renderer = new THREE.WebGLRenderer();
-		renderer.setSize( window.innerWidth, window.innerHeight );
-		document.body.appendChild( renderer.domElement );
-
-		let texture;
-
-		let defaultsrc = new URLSearchParams(window.location.search).get("image");
-
-		if(defaultsrc){
-    		texture = new THREE.TextureLoader().load( defaultsrc );
-		} else {
-			texture = new THREE.Texture();
-			let blob = new Blob([document.getElementById("mapsvg").outerHTML], {type:"image/svg+xml"})
-			let bloburl = URL.createObjectURL(blob);
-			let image = new Image(10000,5000);
-			image.src = bloburl;
-			texture.image = image;
-		}
-
-		texture.minFilter = THREE.NearestFilter;
-		texture.needsUpdate = true;
-
-		let material = new THREE.MeshBasicMaterial({map: texture});
-		const geometry = new THREE.SphereGeometry(2, 64, 32);
-		const globe = new THREE.Mesh( geometry, material );
-		scene.add( globe );
-
-		let atmo_material = new THREE.MeshBasicMaterial({opacity: 0.1, transparent: true, color: 0x77f2e4, side:THREE.DoubleSide});
-		const atmo_geometry = new THREE.SphereGeometry(2.2, 64, 32, Math.PI, Math.PI);
-		const atmosphere = new THREE.Mesh( atmo_geometry, atmo_material );
-		scene.add( atmosphere )
-		document.getElementById("toggleatmosphere").addEventListener("change", (e) => {
-			if(e.target.checked){
-				atmosphere.material.opacity = 0.1;
-			} else {
-				atmosphere.material.opacity = 0;
-			}
-		})
-
-		var dropZone = document.getElementById('dropZone');
-
-		dropZone.addEventListener('dragover', function(e) {
-		    e.stopPropagation();
-		    e.preventDefault();
-		})
-
-		dropZone.addEventListener('drop', function(e) {
-		    e.stopPropagation();
-		    e.preventDefault();
-		    let file = e.dataTransfer.files[0]; // Array of all files
-		    let imageurl = URL.createObjectURL(file);
-    		let texture = new THREE.TextureLoader().load( imageurl );
-			texture.minFilter = THREE.NearestFilter;
-			let material = new THREE.MeshBasicMaterial({map: texture});
-			globe.material = material;
-		})
-
-
-		camera.position.z = 50;
-
-		let clicked = false;
-		let spin = false;
-		let lastMouseX;
-		let lastMouseY;
-		let mouseX;
-		let mouseY;
-		let velX = 0;
-		let velY = 0;
-		const sensitivity = 0.0025;
-
-		document.addEventListener("mousedown", (e) => {
-			clicked = true;
-			lastMouseX = mouseX = e.pageX;
-			lastMouseY = mouseY = e.pageY;
-			e.preventDefault();
-		});
-
-		document.addEventListener("mousemove", (e) => {
-			mouseX = e.pageX;
-			mouseY = e.pageY;
-		})
-		document.addEventListener("mouseup", (e) => {
-			clicked = false;
-			if(e.button == 2){
-				spin = !spin;
-			}
-		});
-
-		const minZ = 5
-		document.addEventListener("wheel", (e) => {
-			camera.position.z += e.deltaY / 35
-			if(camera.position.z < minZ){
-				camera.position.z = minZ;
-			}
-		})	
-
-		let tapped = false
-		let pinch = false;
-		let lastTouchDist;
-		const touchSensitivity = 0.0050
-
-		document.addEventListener("touchstart", (e) => {
-			if (e.touches.length === 1){
-				tapped = true;
-				lastMouseX = mouseX = e.touches[0].pageX;
-				lastMouseY = mouseY = e.touches[0].pageY;
-			} else {
-				pinch = true
-				lastTouchDist = Math.hypot(
-				    e.touches[0].pageX - e.touches[1].pageX,
-				    e.touches[0].pageY - e.touches[1].pageY);
-				}
-
-		})
-
-		document.addEventListener("touchmove", (e) => {
-			if (pinch) {
-				let touchDist = Math.hypot(
-				    e.touches[0].pageX - e.touches[1].pageX,
-				    e.touches[0].pageY - e.touches[1].pageY);
-				delta = touchDist - lastTouchDist;
-				camera.position.z -= camera.position.z * delta / 300
-				if(camera.position.z < minZ){
-					camera.position.z = minZ;
-				}
-				lastTouchDist = touchDist
-			} else {
-				mouseX = e.touches[0].pageX;
-				mouseY = e.touches[0].pageY;
-			}
-
-		})
-
-		document.addEventListener("touchend", (e) => {
-			tapped = false;
-			pinch = false;
-		});
-
-
-		window.addEventListener( 'resize', () => {
-
-		    camera.aspect = window.innerWidth / window.innerHeight;
-		    camera.updateProjectionMatrix();
-		    renderer.setSize( window.innerWidth, window.innerHeight );
-
-		});
-
-		function animate() {
-
-		requestAnimationFrame( animate );
-			if(clicked){
-				velY = sensitivity * (mouseX - lastMouseX) * (camera.position.z/50);
-				velX = sensitivity * (mouseY - lastMouseY) * (camera.position.z/50);
-			} else if (tapped){
-				velX = touchSensitivity * (mouseY - lastMouseY) * (camera.position.z/50);
-				velY = touchSensitivity * (mouseX - lastMouseX) * (camera.position.z/50);
-			} else if(spin){
-				velX *= 0.8;
-				velY = (velY-0.005)*0.8
-			} else {
-				velX *= 0.8;
-				velY *= 0.8;
-			}
-
-			globe.rotation.x += velX;
-			globe.rotation.y += velY;
-
-
-			if(globe.rotation.x > 1.57079633){
-				globe.rotation.x -= 0.2*(globe.rotation.x-1.57079633)
-			} else if(globe.rotation.x < -1.57079633){
-				globe.rotation.x -= 0.2*(1.57079633+globe.rotation.x)
-			}
-
-
-			lastMouseX = mouseX;
-			lastMouseY = mouseY;
-
-			renderer.render( scene, camera );
-		}
-		
-		animate();
-
-
-	</script>
-
 
 
 </body>
